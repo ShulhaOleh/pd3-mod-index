@@ -13,7 +13,6 @@
 import Database, { type Database as DB } from 'better-sqlite3'
 import { createHash } from 'crypto'
 import { join } from 'path'
-import { writeFileSync } from 'fs'
 
 const BASE = 'https://api.modworkshop.net'
 const GAME_ID = 853
@@ -279,18 +278,6 @@ async function main(): Promise<void> {
         console.log(`\n${errors.length} errors:`)
         errors.forEach((e) => console.log(`  - ${e}`))
     }
-
-    const rows = db
-        .prepare(
-            `SELECT f.sha256, m.remote_id AS modRemoteId, m.name AS modName,
-                    f.remote_id AS fileRemoteId, f.version
-             FROM files f JOIN mods m ON m.id = f.mod_id`
-        )
-        .all() as Array<{ sha256: string; modRemoteId: number; modName: string; fileRemoteId: number; version: string }>
-    const jsonIndex: Record<string, { modRemoteId: number; modName: string; fileRemoteId: number; version: string }> = {}
-    for (const { sha256, ...rest } of rows) jsonIndex[sha256] = rest
-    writeFileSync(join(import.meta.dirname, 'sha256-index.json'), JSON.stringify(jsonIndex))
-    console.log(`Exported ${rows.length} entries to sha256-index.json`)
 
     db.close()
 }
