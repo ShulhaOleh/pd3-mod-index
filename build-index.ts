@@ -123,12 +123,21 @@ async function apiGet<T>(path: string, params?: Record<string, unknown>): Promis
             if (v != null) url.searchParams.set(k, String(v))
         }
     }
-    const res = await fetch(url, {
-        headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
-        signal: AbortSignal.timeout(30_000),
-    })
-    if (!res.ok) throw new Error(`API ${res.status}: ${path}`)
-    return res.json() as T
+    for (let attempt = 0; attempt < 5; attempt++) {
+        const res = await fetch(url, {
+            headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
+            signal: AbortSignal.timeout(30_000),
+        })
+        if (res.status === 429) {
+            const wait = 2_000 * 2 ** attempt
+            console.warn(`  [429] ${path} — retrying in ${wait}ms`)
+            await delay(wait)
+            continue
+        }
+        if (!res.ok) throw new Error(`API ${res.status}: ${path}`)
+        return res.json() as T
+    }
+    throw new Error(`API 429: ${path} (gave up after retries)`)
 }
 
 async function listAllMods(): Promise<Mod[]> {
