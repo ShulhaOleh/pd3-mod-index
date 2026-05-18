@@ -1,0 +1,13 @@
+{
+    "name": "pd3-mod-index",
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "build-index": "tsx build-index.ts"
+    },
+    "devDependencies": {
+        "@types/better-sqlite3": "^7.6.13",
+        "better-sqlite3": "^11.9.1",
+        "tsx": "^4.22.1"
+    }
+}
