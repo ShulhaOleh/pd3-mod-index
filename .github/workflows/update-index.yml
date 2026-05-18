@@ -34,7 +34,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload latest-index index.db --clobber 2>/dev/null || \
-            gh release create latest-index index.db \
+          gh release upload latest-index index.db sha256-index.json --clobber 2>/dev/null || \
+            gh release create latest-index index.db sha256-index.json \
               --title "Latest mod index" \
               --notes "Auto-updated PD3 mod hash index for pd3-mod-manager."

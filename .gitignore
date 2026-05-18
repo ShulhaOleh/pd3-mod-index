@@ -1,3 +1,4 @@
 node_modules/
 *.lock
 index.db
+sha256-index.json
