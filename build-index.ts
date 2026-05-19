@@ -29,6 +29,7 @@ interface Mod {
     id: number
     name: string
     has_download: boolean
+    bumped_at: string
     download: { id: number; version: string; download_url: string; type: string } | null
 }
 
@@ -88,6 +89,11 @@ CREATE TABLE IF NOT EXISTS files (
 );
 
 CREATE INDEX IF NOT EXISTS idx_files_sha256 ON files(sha256);
+
+CREATE TABLE IF NOT EXISTS metadata (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 `
 
 // --- db setup ---
@@ -140,7 +146,11 @@ async function apiGet<T>(path: string, params?: Record<string, unknown>): Promis
     throw new Error(`API 429: ${path} (gave up after retries)`)
 }
 
-async function listAllMods(): Promise<Mod[]> {
+// 10-minute overlap so mods bumped during the previous run aren't missed
+const SINCE_BUFFER_MS = 10 * 60 * 1000
+
+async function listModsSince(since: Date | null): Promise<Mod[]> {
+    const threshold = since ? new Date(since.getTime() - SINCE_BUFFER_MS) : null
     const mods: Mod[] = []
     let page = 1
     let lastPage = 1
@@ -148,10 +158,18 @@ async function listAllMods(): Promise<Mod[]> {
         const result = await apiGet<Paginated<Mod>>(`/games/${GAME_ID}/mods`, {
             limit: 50,
             page,
-            sort: 'published_at',
+            sort: 'bumped_at',
         })
-        mods.push(...result.data)
         lastPage = result.meta.last_page
+        const batch = result.data
+
+        if (threshold) {
+            mods.push(...batch.filter((m) => new Date(m.bumped_at) >= threshold))
+            if (batch.length > 0 && new Date(batch[batch.length - 1].bumped_at) < threshold) break
+        } else {
+            mods.push(...batch)
+        }
+
         console.log(`  page ${page}/${lastPage} (${mods.length} mods)`)
         page++
         if (page <= lastPage) await delay(API_DELAY_MS)
@@ -215,7 +233,13 @@ async function main(): Promise<void> {
     console.log('Opening database...')
     const { db, sourceId } = openDb()
     const indexedFileIds = getIndexedFileIds(db)
-    console.log(`  ${indexedFileIds.size} files already indexed\n`)
+    console.log(`  ${indexedFileIds.size} files already indexed`)
+
+    const lastRunRow = db.prepare('SELECT value FROM metadata WHERE key = ?').get('last_run_at') as
+        | { value: string }
+        | undefined
+    const lastRunAt = lastRunRow ? new Date(lastRunRow.value) : null
+    console.log(lastRunAt ? `  Last run: ${lastRunAt.toISOString()} — incremental update\n` : '  No previous run — full index build\n')
 
     const insertMod = db.prepare(
         'INSERT OR IGNORE INTO mods (source_id, remote_id, name, url) VALUES (?, ?, ?, ?)'
@@ -226,9 +250,10 @@ async function main(): Promise<void> {
         'INSERT OR IGNORE INTO files (mod_id, sha256, remote_id, version, indexed_at) VALUES (?, ?, ?, ?, ?)'
     )
 
+    const runStartedAt = new Date()
     console.log('Fetching mod list...')
-    const mods = await listAllMods()
-    console.log(`  ${mods.length} mods total\n`)
+    const mods = await listModsSince(lastRunAt)
+    console.log(`  ${mods.length} mods to process\n`)
 
     const errors: string[] = []
     let done = 0
@@ -279,6 +304,11 @@ async function main(): Promise<void> {
 
     console.log(`Processing ${mods.length} mods with ${CONCURRENCY} concurrent workers...\n`)
     await runPool(tasks, CONCURRENCY)
+
+    db.prepare('INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)').run(
+        'last_run_at',
+        runStartedAt.toISOString()
+    )
 
     const total = (db.prepare('SELECT COUNT(*) as n FROM files').get() as { n: number }).n
     console.log(`\nDone. ${total} files in index.db`)
