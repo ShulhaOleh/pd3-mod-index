@@ -1,6 +1,8 @@
 name: Update mod index
 
 on:
+  schedule:
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -48,4 +50,4 @@ jobs:
           gh release upload latest-index index.db --clobber 2>/dev/null || \
             gh release create latest-index index.db \
               --title "Latest mod index" \
-              --notes "Auto-updated PD3 mod hash index for pd3-mod-manager."
+              --notes "Auto-updated PD3 mod hash index for modrex."

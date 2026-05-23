@@ -16,7 +16,7 @@ import { join } from 'path'
 
 const BASE = 'https://api.modworkshop.net'
 const GAME_ID = 853
-const USER_AGENT = 'pd3-mod-indexer/1.0'
+const USER_AGENT = 'modrex-indexer/1.0'
 const DB_PATH = join(import.meta.dirname, 'index.db')
 const CONCURRENCY = parseInt(
     process.argv.find((a) => a.startsWith('--concurrency='))?.split('=')[1] ?? '5'
